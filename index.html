@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MailCheck</title>
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://re-search.val.run/">
+  <meta property="og:title" content="MailCheck — Email Real-Person Checker">
+  <meta property="og:description" content="Check email addresses for real-person evidence with LLM and web signals.">
+  <!-- <meta property="og:image" content="https://imagedelivery.net/TysXuIP7qbyd6gh5m_zQIQ/1764955c-dd1f-4745-2aed-3b59717e3d00/medium"> -->
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://re-search.val.run/">
+  <meta property="twitter:title" content="MailCheck — Email Real-Person Checker">
+  <meta property="twitter:description" content="Check email addresses for real-person evidence with LLM and web signals.">
+  <!-- <meta property="twitter:image" content="https://imagedelivery.net/TysXuIP7qbyd6gh5m_zQIQ/1764955c-dd1f-4745-2aed-3b59717e3d00/medium"> -->
+  <script>
+    // Ensure Alpine waits until our module registers the data store
+    window.deferLoadingAlpine = function (start) { window._startAlpine = start; };
+  </script>
+  <script type="module" src="frontend/init.js"></script>
+  <script src="https://unpkg.com/alpinejs@3.10.5/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+  <style>
+    body, * {
+      font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    }
+    /* Global spacing for headings and lists (applies to rendered markdown too) */
+    h1, h2, h3, h4, h5, h6 { margin-top: 1.25rem; margin-bottom: 0.75rem; font-weight: 600; }
+    ul, ol { margin-top: 0.5rem; margin-bottom: 0.75rem; padding-left: 1.25rem; }
+    li { margin-bottom: 0.25rem; }
+    /* Table readability defaults */
+    table { width: auto; max-width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    th, td { border: 1px solid #e5e7eb; padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; word-break: break-word; overflow-wrap: anywhere; }
+    th, td { max-width: 60ch; }
+    .prose p {
+      margin-bottom: 0.75rem !important;
+    }
+    .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+      margin-top: 1.5rem !important;
+      margin-bottom: 0.75rem !important;
+      font-weight: 600 !important;
+    }
+    .prose h1 {
+      font-size: 1.875rem !important;
+      line-height: 2.25rem !important;
+    }
+    .prose h2 {
+      font-size: 1.5rem !important;
+      line-height: 2rem !important;
+    }
+    .prose h3 {
+      font-size: 1.25rem !important;
+      line-height: 1.75rem !important;
+    }
+    .prose h4 {
+      font-size: 1.125rem !important;
+      line-height: 1.75rem !important;
+    }
+    .prose ul, .prose ol {
+      margin-top: 0.75rem !important;
+      margin-bottom: 0.75rem !important;
+      padding-left: 1.5rem !important;
+    }
+    .prose li {
+      margin-bottom: 0.25rem !important;
+    }
+    .prose ul {
+      list-style-type: disc !important;
+    }
+    .prose ol {
+      list-style-type: decimal !important;
+    }
+    .prose blockquote {
+      margin-top: 1rem !important;
+      margin-bottom: 1rem !important;
+      padding-left: 1rem !important;
+      border-left: 4px solid #e5e7eb !important;
+      font-style: italic !important;
+    }
+    .prose strong {
+      font-weight: 600 !important;
+    }
+    .prose em {
+      font-style: italic !important;
+    }
+    .prose code {
+      background-color: #f3f4f6 !important;
+      padding: 0.125rem 0.25rem !important;
+      border-radius: 0.25rem !important;
+      font-size: 0.875em !important;
+    }
+    .prose pre {
+      background-color: #f3f4f6 !important;
+      padding: 1rem !important;
+      border-radius: 0.5rem !important;
+      overflow-x: auto !important;
+      margin-top: 0.75rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+    .prose pre code {
+      background-color: transparent !important;
+      padding: 0 !important;
+    }
+    .prose a {
+      color: #2563eb !important;
+      text-decoration: underline !important;
+    }
+    .prose a:hover {
+      color: #1d4ed8 !important;
+    }
+    /* Hide empty badges to avoid empty gray box on pending */
+    .badge:empty { display: none; }
+    /* Prevent wrapping on table headers and selected cells */
+    thead th { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+    .nowrap { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+    .loading-spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-left-color: #f59e0b;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .card-washed-shadow {
+      box-shadow:
+        0 2px 28px 0 rgba(60, 60, 60, 0.06),
+        0 8px 28px 0 rgba(60, 60, 60, 0.08),
+        0 16px 62px 0 rgba(60, 60, 60, 0.09);
+      border: 1px solid #fafafa;
+      padding: 6px;
+    }
+
+    .slide-up {
+      animation: slideUp 0.4s ease-out forwards;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    @keyframes slideUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+  <div x-data="mailcheckApp()" class="flex h-full overflow-hidden">
+
+    <!-- Mobile overlay sidebar (disabled)
+    <div class="fixed inset-0 z-40 md:hidden" x-show="sidebarOpen" x-transition.opacity>
+      <div class="absolute inset-0 bg-black/30" @click="sidebarOpen=false"></div>
+      <aside
+        class="absolute left-0 top-0 h-full w-72 bg-white shadow-xl flex flex-col transform"
+        x-show="sidebarOpen"
+        x-transition:enter="transform transition ease-in-out duration-300"
+        x-transition:enter-start="-translate-x-full opacity-0"
+        x-transition:enter-end="translate-x-0 opacity-100"
+        x-transition:leave="transform transition ease-in-out duration-300"
+        x-transition:leave-start="translate-x-0 opacity-100"
+        x-transition:leave-end="-translate-x-full opacity-0"
+      >
+        <div class="p-4 border-b flex items-center justify-between">
+          <span class="font-semibold text-gray-800">MailCheck</span>
+          <button type="button" @click="sidebarOpen=false" class="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <div class="p-3 text-sm text-gray-500"></div>
+        </div>
+        <div class="p-4 border-t space-y-2">
+          <button type="button" @click="createNewSavedSearch()" class="w-full text-sm px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">New search</button>
+        </div>
+      </aside>
+    </div>
+    -->
+
+    <!-- Desktop sidebar (collapsible) — jobs tracking -->
+    <aside class="hidden md:flex md:flex-col h-full bg-white border-r overflow-hidden transition-all duration-300 ease-in-out relative " :class="sidebarCollapsed ? 'w-12' : 'w-72'" style="will-change: width;">
+      <div class="p-4 border-b flex items-center justify-between">
+        <span class="font-semibold text-gray-800">Jobs</span>
+        <div class="flex items-center gap-2" x-show="!sidebarCollapsed">
+          <button type="button" @click="createNewJob()" class="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">New</button>
+          <button type="button" @click="collapseSidebar()" class="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" title="Hide sidebar">Hide</button>
+        </div>
+        <div class="p-2" x-show="sidebarCollapsed">
+          <button type="button" @click="expandSidebar()" class="w-8 h-8 inline-flex items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white shadow-sm" title="Expand sidebar">›</button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto" x-cloak x-show="!sidebarCollapsed && !sidebarTransitioning" x-transition.opacity.duration.200ms>
+        <div class="p-2">
+          <template x-if="(jobsArray && jobsArray.length === 0)">
+            <div class="text-xs text-gray-500 p-2">No jobs yet. Create one.</div>
+          </template>
+          <template x-for="job in (jobsArray || [])" :key="job.name">
+            <div class="group flex items-center justify-between px-2 py-1 rounded hover:bg-gray-50 cursor-pointer" :class="{ 'bg-gray-50': job.name === jobName }" @click="selectJob(job.name)">
+              <div class="flex items-center gap-2 text-sm text-left truncate pr-2" :title="job.name">
+                <span class="relative inline-flex items-center justify-center w-3 h-3">
+                  <span class="absolute inline-flex w-3 h-3 rounded-full" :class="isJobRunning(job.name) ? 'border-2 border-amber-500 animate-spin border-t-transparent' : (isJobDoneRecently(job.name) ? 'bg-green-500' : 'border-2 border-gray-300')"></span>
+                </span>
+                <span class="font-mono" x-text="job.name"></span>
+                <span class="ml-2 text-[10px] text-gray-500" x-text="'(' + job.answersCount + ')' "></span>
+                <span class="ml-1 text-[10px] text-green-600" x-show="!isJobRunning(job.name) && isJobDoneRecently(job.name)">done</span>
+              </div>
+              <button type="button" class="opacity-0 group-hover:opacity-100 text-xs text-red-600" @click.stop="deleteJob(job.name)">del</button>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="p-3 border-t text-[11px] text-gray-600" x-cloak x-show="!sidebarCollapsed && !sidebarTransitioning" x-transition.opacity.duration.200ms>
+        <div class="flex items-center justify-between">
+          <span class="inline-flex items-center gap-2">
+            <span>active:</span>
+            <span class="w-3 h-3 rounded-full" :class="isJobRunning(jobName) ? 'border-2 border-amber-500 animate-spin border-t-transparent' : (isJobDoneRecently(jobName) ? 'bg-green-500' : 'border-2 border-gray-300')"></span>
+            <span class="text-[10px] text-green-600" x-show="!isJobRunning(jobName) && isJobDoneRecently(jobName)">done</span>
+          </span>
+          <span class="font-mono truncate max-w-[9rem]" :title="jobName" x-text="jobName || '(none)'"></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content area -->
+    <main class="flex-1 h-full overflow-y-auto">
+      <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Mobile top bar -->
+        <div class="md:hidden flex items-center justify-between mb-4">
+          <button type="button" @click="toggleSidebar()" class="inline-flex items-center gap-2 px-3 py-2 rounded border border-gray-200 bg-white text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M3 6.75A.75.75 0 0 1 3.75 6h16.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 6.75Zm0 10.5a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Zm0-5.25a.75.75 0 0 1 .75-.75h16.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z"/></svg>
+            <span>Menu</span>
+          </button>
+          <div></div>
+        </div>
+
+        <div class="text-center mb-8">
+          <h1 class="text-2xl font-bold text-gray-800 mb-2" x-text="i18n.title"></h1>
+          <p class="text-sm text-gray-600" x-text="i18n.subtitle"></p>
+        </div>
+
+    <!-- API Key Input (shown when no server key) -->
+    <div x-show="!hasServerKey && !userApiKey" class="mb-6">
+      <div class="flex gap-2 items-center">
+        <input 
+          type="password"
+          x-model="apiKeyInput"
+          placeholder="Enter your Groq API key..."
+          class="flex-1 px-3 py-2 text-sm rounded-md focus:ring-2 focus:ring-blue-400 focus:border-transparent border-0 bg-gray-50">
+        <button 
+          type="button"
+          @click="setApiKey()"
+          :disabled="!apiKeyInput.trim()"
+          class="px-3 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 disabled:opacity-50">
+          Set Key
+        </button>
+      </div>
+      <p class="text-xs text-gray-600 mt-2 text-center">
+        <a href="https://console.groq.com/keys" target="_blank" class="underline hover:text-gray-800" x-text="i18n.getKeyHere"></a>
+      </p>
+    </div>
+
+    <!-- API Key Status (shown when user key is set) -->
+    <div x-show="!hasServerKey && userApiKey" class="mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center">
+          <span class="text-sm text-gray-700" x-text="i18n.apiKey"></span>
+          <code class="text-xs text-gray-600 ml-1" x-text="maskedApiKey"></code>
+        </div>
+        <div class="flex gap-2">
+          <button 
+            type="button"
+            @click="changeApiKey()"
+            class="text-xs text-gray-600 hover:text-gray-800 underline">
+            <span x-text="i18n.change"></span>
+          </button>
+          <button 
+            type="button"
+            @click="clearApiKey()"
+            class="text-xs text-gray-600 hover:text-gray-800 underline">
+            <span x-text="i18n.clear"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+      <!-- Job name row -->
+    <div class="mb-4">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            x-model="jobInput"
+            placeholder="job name..."
+            class="px-2 py-1 text-xs rounded-md border border-black bg-white text-black focus:ring-1 focus:ring-black focus:outline-none"
+            style="line-height: 1.1;"
+          />
+          <button
+            type="button"
+            @click="setJobName()"
+            class="px-2 py-1 text-xs rounded border border-black text-black hover:bg-gray-100 leading-none"
+            title="Set job name"
+          >set</button>
+        </div>
+        <div class="flex items-center gap-2 ml-4">
+          <label class="text-xs text-gray-600">concurrency</label>
+          <input type="number" min="1" max="32" x-model.number="concurrency" class="w-20 text-xs px-2 py-1 border border-gray-300 rounded-md">
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload / System Prompt / Paste -->
+    <div class="mb-4">
+      <div class="bg-white rounded-lg card-washed-shadow p-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Upload CSV/JSON</label>
+          <input type="file" @change="handleFileChange($event)" accept=".csv,.json,.txt" class="w-full text-sm" />
+          <div class="text-xs text-gray-600 mt-1" x-text="sourceFileName"></div>
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">System prompt (optional)</label>
+          <textarea x-model="systemPrompt" rows="4" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="Guidance for LLM checks (not used yet)" @keydown.meta.enter.prevent="parsePaste()" @keydown.ctrl.enter.prevent="parsePaste()"></textarea>
+        </div>
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Allowlist (emails/domains or regex)</label>
+            <textarea x-model="whitelistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="@groq.com\nuser@example.com\n*@example.org\n/^first\.last@company\.com$/i"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Blocklist (emails/domains or regex)</label>
+            <textarea x-model="blacklistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="/^[a-z]{2,}[0-9]{2,4}@/i\n@temp-mail.com\n*@noidem"></textarea>
+          </div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500">
+          One per line. Emails, domains, or regex. Examples: <code>user@example.com</code>, <code>@example.com</code>, <code>*@example.com</code>, <code>example.com</code>, or regex like <code>/^first\.last@company\.com$/i</code>.
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Paste emails or CSV/JSON</label>
+          <textarea x-model="pasteInput" rows="6" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="one@example.com&#10;other@example.com" @keydown.meta.enter.prevent="parsePaste()" @keydown.ctrl.enter.prevent="parsePaste()"></textarea>
+          <div class="flex items-center gap-2 mt-2">
+            <button type="button" @click="parsePaste()" class="px-3 py-1 rounded bg-gray-800 text-white hover:bg-gray-900">Save & parse</button>
+            <div class="text-xs text-gray-600">
+              <span class="mr-3">emails detected: <span class="font-mono" x-text="detectedEmailCount"></span>/<span class="font-mono" x-text="totalCount"></span></span>
+              <span class="mr-3">field: <span class="font-mono" x-text="emailFieldName || '(auto)'"></span></span>
+              <span>source: <span class="font-mono" x-text="(sourceKind || 'none')"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Single Email Spot Check -->
+    <div class="mb-4">
+      <div class="bg-white rounded-lg card-washed-shadow p-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Spot check a single email</label>
+        <div class="flex items-center gap-2">
+          <input type="text" x-model="singleEmailInput" x-ref="singleEmailInputRef" @keydown.enter.prevent="runSingleCheck()" placeholder="email@example.com" class="flex-1 px-3 py-1 text-sm rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <button type="button" @click="runSingleCheck()" :disabled="singleChecking || !(singleEmailInput && isEmail(singleEmailInput))" class="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">Run</button>
+        </div>
+        <div class="mt-3 text-sm" x-show="singleResult">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2 py-0.5 text-xs border rounded" :class="badgeClass(singleResult?.status)" x-text="statusLabel(singleResult?.status)"></span>
+            <span class="text-xs text-gray-600" x-text="singleResult?.email"></span>
+          </div>
+          <div class="text-xs text-gray-700" x-text="singleResult?.fields?.bg_academic_msg || ''"></div>
+          <div class="text-xs" x-text="singleResult?.fields?.bg_compound_short || singleResult?.fields?.bg_compound_msg || singleResult?.message || ''"></div>
+          <details class="mt-1" x-show="singleResult?.fields?.bg_compound_detail || singleResult?.fields?.bg_compound_debug">
+            <summary class="text-xs text-gray-600 cursor-pointer">detail</summary>
+            <div class="text-xs text-gray-700 whitespace-pre-wrap" x-text="singleResult?.fields?.bg_compound_detail || ''"></div>
+            <div class="text-[10px] text-gray-400 mt-1" x-show="singleResult?.fields?.bg_compound_debug" x-text="singleResult?.fields?.bg_compound_debug"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div class="bg-white rounded-lg card-washed-shadow mb-6">
+      <div class="py-4 px-4">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <button type="button" @click="runChecks()" :disabled="isRunning || totalCount === 0" class="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">Run All</button>
+          <button type="button" @click="runPendingChecks()" :disabled="isRunning || pendingCount === 0" class="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">Run Pending</button>
+          <button type="button" x-show="isRunning" @click="cancelRun()" class="px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+          <div class="ml-auto flex items-center gap-2">
+            <button type="button" @click="downloadCsv()" class="px-2 py-1 text-xs rounded bg-gray-800 text-white hover:bg-gray-900">Download CSV</button>
+            <button type="button" @click="downloadJson()" class="px-2 py-1 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Download JSON</button>
+            <button type="button" @click="copyJson()" class="px-2 py-1 text-xs rounded bg-gray-700 text-white hover:bg-gray-800">Copy JSON</button>
+          </div>
+        </div>
+        <div class="text-xs text-gray-600 mb-2">progress: <span class="font-mono" x-text="completedCount"></span>/<span class="font-mono" x-text="totalCount"></span></div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50">
+                <th class="text-left px-2 py-1"></th>
+                <th class="text-left px-2 py-1">Email</th>
+                <th class="text-left px-2 py-1">Status</th>
+                <th class="text-left px-2 py-1">Assessment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(it, idx) in items" :key="getRecordEmail(it) || idx">
+                <tr class="border-t">
+                  <td class="px-2 py-1 pb-4 h-24 whitespace-nowrap align-top relative">
+                    <div class="flex flex-col items-start">
+                      <button type="button" class="text-xs text-green-700 hover:underline" @click="runOne(idx)">run</button>
+                      <button type="button" class="text-xs text-blue-700 hover:underline" @click="navigator.clipboard.writeText(getRecordEmail(it))">copy</button>
+                    </div>
+                    <button type="button" class="px-2 text-xs text-red-600 hover:underline absolute bottom-1 left-0" @click="deleteItem(idx)">del</button>
+                  </td>
+                  <td class="px-2 py-1">
+                    <div x-show="!it._editingEmail" @dblclick="enableEdit(idx)" class="font-mono cursor-text whitespace-nowrap overflow-hidden text-ellipsis max-w-[24rem]" x-text="getRecordEmail(it)"></div>
+                    <div x-show="it._editingEmail" class="flex items-center gap-2 flex-wrap">
+                      <div contenteditable="true" spellcheck="false"
+                           class="px-2 py-1 text-xs rounded border border-gray-300 font-mono bg-white min-w-[220px] max-w-[24rem] whitespace-nowrap overflow-hidden"
+                           x-text="it._editEmailValue"
+                           @input="it._editEmailValue = ($event.target.textContent || '').trim()"
+                           @keydown.enter.prevent="commitEdit(idx)"
+                           @keydown.escape.prevent="cancelEdit(idx)"></div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" class="text-xs px-2 py-1 rounded border border-gray-300 whitespace-nowrap" @click="commitEdit(idx)">save</button>
+                        <button type="button" class="text-xs px-2 py-1 rounded border border-gray-300 whitespace-nowrap" @click="cancelEdit(idx)">cancel</button>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-2 py-1 nowrap">
+                    <span class="px-2 py-0.5 text-xs border rounded" :class="badgeClass(it.bg_status)" x-text="statusLabel(it.bg_status)"></span>
+                  </td>
+                  <td class="px-2 py-1">
+                    <div class="flex flex-col gap-1">
+                      <div>
+                        <span class="badge text-xs px-2 py-0.5 border rounded bg-gray-50"
+                          x-text="
+                            it.bg_final_label ? ('[' + it.bg_final_label + ']') :
+                            it.bg_browser_label ? ('[' + it.bg_browser_label + ']') :
+                            it.bg_compound_label ? ('[' + it.bg_compound_label + ']') :
+                            (it.bg_status === 'checking' ? '[checking]' : '[' + statusLabel(it.bg_status) + ']')
+                          "></span>
+                      </div>
+                      <div class="text-xs text-gray-700" x-show="it.bg_academic_msg" x-text="it.bg_academic_msg"></div>
+                      <div class="text-xs" x-text="it.bg_final_short || it.bg_browser_short || it.bg_compound_short || it.bg_compound_msg || ''"></div>
+                      <div class="text-xs text-gray-700" x-show="it.bg_message" x-text="it.bg_message"></div>
+                    </div>
+                    <details class="mt-1" x-show="it.bg_final_detail || it.bg_browser_detail || it.bg_compound_detail || it.bg_compound_debug || it.bg_browser_debug || (it.bg_final_evidence && it.bg_final_evidence.length) || (it.bg_browser_evidence && it.bg_browser_evidence.length) || (it.bg_compound_evidence && it.bg_compound_evidence.length)">
+                      <summary class="text-xs text-gray-600 cursor-pointer">detail</summary>
+                      <div class="text-xs text-gray-700 whitespace-pre-wrap" x-text="it.bg_final_detail || it.bg_browser_detail || it.bg_compound_detail || ''"></div>
+                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="it.bg_final_evidence && it.bg_final_evidence.length">
+                        <template x-for="(e,i) in it.bg_final_evidence" :key="i">
+                          <li x-text="e"></li>
+                        </template>
+                      </ul>
+                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="(!it.bg_final_evidence || !it.bg_final_evidence.length) && it.bg_browser_evidence && it.bg_browser_evidence.length">
+                        <template x-for="(e,i) in it.bg_browser_evidence" :key="i">
+                          <li x-text="e"></li>
+                        </template>
+                      </ul>
+                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="(!it.bg_final_evidence || !it.bg_final_evidence.length) && (!it.bg_browser_evidence || !it.bg_browser_evidence.length) && it.bg_compound_evidence && it.bg_compound_evidence.length">
+                        <template x-for="(e,i) in it.bg_compound_evidence" :key="i">
+                          <li x-text="e"></li>
+                        </template>
+                      </ul>
+                      <div class="text-[10px] text-gray-400 mt-1" x-show="it.bg_compound_debug || it.bg_browser_debug" x-text="it.bg_compound_debug || it.bg_browser_debug"></div>
+                    </details>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="(items || []).length === 0">
+                <td colspan="4" class="px-2 py-2 text-sm text-gray-500">No items yet. Upload or paste emails to begin.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden legacy blocks -->
+    <div x-show="false"></div>
+
+    <div x-show="false"></div>
+
+    <div x-show="false"></div>
+    
+    <!-- Empty State moved near footer, no fixed positioning -->
+    
+
+          <!-- Footer (moved inside main container) -->
+          <div class="w-full flex flex-col items-center gap-1 pb-8 pt-8">
+            <a class="pb-4" href="https://groq.com" target="_blank" rel="noopener noreferrer" aria-label="Powered by Groq">
+              <img
+                src="https://console.groq.com/powered-by-groq.svg"
+                alt="Powered by Groq for fast inference."
+                class="h-12"
+              />
+            </a>
+            <a
+              href="https://github.com/janzheng/re-search"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-xs text-gray-500 underline pb-2"
+            >github</a>
+          </div>
+        </div>
+      </div>
+    </main>
+        
+
+        
+
+</body>
+</html>
