@@ -1,8 +1,8 @@
-### MailCheck — Real‑Person Email Verifier (Groq)
+## MailCheck — Real‑Person Email Verifier (Groq)
 
 Verify that email addresses belong to real people using lightweight web + LLM signals. Upload/paste lists, run concurrent checks, and export annotated results.
 
-What it does
+## Features
 - Upload CSV/JSON or paste text; inline edit and delete rows
 - Jobs sidebar with autosave (localStorage)
 - Per‑email verification with concurrency and live row updates
@@ -10,30 +10,37 @@ What it does
   - Academic domain detection (institution annotation)
   - Role/alias heuristic (flags generic addresses)
   - Web + LLM assessments consolidated by a final judge into one decision
+- Allowlist/Blocklist with domains, exact emails, or regex
 - Export CSV/JSON (preserves original columns + `bg_*` fields)
 
-Statuses
-- person_high
-- person_low
-- person_none
-- spam
+## Statuses
+- `person_high`
+- `person_low`
+- `person_none`
+- `spam`
+- `whitelist` (short‑circuit on allowlist)
 
-Requirements
+## Requirements
 - Deno 1.40+
 - Groq API key
 
-Run locally
+## Quick Start
+1) Install Deno: https://deno.land/#installation
+2) Start the dev server:
 ```sh
-deno run -A main.js
+deno task serve
 ```
-Open http://localhost:8000. If the server doesn’t have `GROQ_API_KEY`, set a key in the UI.
+This runs: `deno serve --port 8013 --allow-sys --allow-read --allow-import --allow-env --allow-write --allow-net --reload=https://esm.town ./main.js`.
 
-Environment
+Open http://localhost:8013. If the server doesn’t have `GROQ_API_KEY`, add a user key in the UI.
+
+## Configuration
 - `GROQ_API_KEY`: Groq key (server). The UI also supports a per‑user key.
 
-API
+## API Reference
 
-- POST `/api/check/background`
+### Single check
+POST `/api/check/background`
   - body
     ```json
     {
@@ -71,7 +78,28 @@ API
     }
     ```
 
-Notes
+### Async jobs
+Create a job to process many emails concurrently.
+
+- Create job
+  - POST `/api/jobs`
+  - body
+  ```json
+  {
+    "items": ["a@example.com", {"email": "b@example.com"}],
+    "systemPrompt": "",
+    "concurrency": 8,
+    "userApiKey": "<optional>"
+  }
+  ```
+  - response: job summary `{ id, running, total, completed, items: [{ id, email, status }] }`
+
+- Get status: GET `/api/jobs/:id`
+- Cancel: POST `/api/jobs/:id/cancel`
+
+> Tip: If you want per‑job allowlist/blocklist, they can be added to the job payload and threaded into the runner.
+
+## Notes
 - Focuses on real‑person verification, not SMTP deliverability.
 - The UI is a thin client over the API—use the endpoint directly if preferred.
 - Lists in the UI are “One per line”; for API requests pass arrays of strings.
