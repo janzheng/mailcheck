@@ -13,6 +13,43 @@ Verify that email addresses belong to real people using lightweight web + LLM si
 - Allowlist/Blocklist with domains, exact emails, or regex
 - Export CSV/JSON (preserves original columns + `bg_*` fields)
 
+## How it works
+
+### UI (index.html)
+The app is a single HTML page (`index.html`) that serves a light client built with Alpine.js and Tailwind. It lets you:
+- Paste or upload emails, edit rows inline, and run checks.
+- Provide an optional system prompt to steer LLM behavior.
+- Configure an Allowlist/Blocklist (one rule per line; supports domains, exact emails, and regex).
+- Kick off background jobs and download results as CSV/JSON.
+
+### Decision pipeline
+For each email, MailCheck performs a staged evaluation and collapses results into a single status and message:
+
+1) Pre‑assessors (fast short‑circuits)
+- Syntax guard: invalid formats → `spam`.
+- Allowlist: immediate `whitelist` with rule annotation.
+- Blocklist: immediate `spam` with rule annotation.
+- Academic detector: annotate institution; enables leniency downstream.
+- Role heuristic: flags role/alias locals (e.g., `info`, `noreply`).
+
+2) Full assessors (run in parallel)
+- Compound LLM (model: `compound-beta`): returns strict JSON with
+  - `status` in `{ person_high, person_low, person_none, spam }`
+  - `message`, `explanation_short`, and `evidence[]`
+  The prompt prefers identity‑first summaries and concrete evidence (role/title, org, city) and penalizes vague name‑only matches.
+- Browser Search (model: `openai/gpt-oss-20b` + `browser_search` tool): performs targeted queries (quoted email, handle+domain, site:linkedin, site:github, org/staff pages). Produces an analysis that is converted to JSON with status/message/explanation/evidence.
+
+3) Final judge (model: `openai/gpt-oss-120b`)
+Consolidates assessor outputs + heuristics (academic, role, domain). Policy:
+- Severity order: `spam > person_none > person_low > person_high`.
+- Credible anti‑abuse signals → `spam`.
+- Plausible identity from reputable sources, no negatives → promote to `person_high`.
+- Leniency: non‑generic org/academic domains with weak but plausible signals may prefer `person_low` over `person_none`.
+The judge produces a single status/message, a short identity‑first summary, and deduplicated evidence bullets suitable for the UI.
+
+### Labels & messages
+Statuses map to compact UI labels (e.g., `person_low` → “possible person”). Where assessors supply explanations, we derive a short identity‑first one‑liner for readability.
+
 ## Statuses
 - `person_high`
 - `person_low`
