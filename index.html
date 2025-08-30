@@ -115,6 +115,8 @@
     .prose a:hover {
       color: #1d4ed8 !important;
     }
+    /* Force left-to-right typing and neutral punctuation behavior in editable email fields */
+    .ltr { direction: ltr; unicode-bidi: isolate; text-align: left; }
     /* Hide empty badges to avoid empty gray box on pending */
     .badge:empty { display: none; }
     /* Prevent wrapping on table headers and selected cells */
@@ -416,12 +418,11 @@
                   <td class="px-2 py-1">
                     <div x-show="!it._editingEmail" @dblclick="enableEdit(idx)" class="font-mono cursor-text whitespace-nowrap overflow-hidden text-ellipsis max-w-[24rem]" x-text="getRecordEmail(it)"></div>
                     <div x-show="it._editingEmail" class="flex items-center gap-2 flex-wrap">
-                      <div contenteditable="true" spellcheck="false"
-                           class="px-2 py-1 text-xs rounded border border-gray-300 font-mono bg-white min-w-[220px] max-w-[24rem] whitespace-nowrap overflow-hidden"
-                           x-text="it._editEmailValue"
-                           @input="it._editEmailValue = ($event.target.textContent || '').trim()"
+                      <input type="text" spellcheck="false" dir="ltr" inputmode="email"
+                           class="px-2 py-1 text-xs rounded border border-gray-300 font-mono bg-white min-w-[220px] max-w-[24rem] ltr"
+                           x-model="it._editEmailValue"
                            @keydown.enter.prevent="commitEdit(idx)"
-                           @keydown.escape.prevent="cancelEdit(idx)"></div>
+                           @keydown.escape.prevent="cancelEdit(idx)" />
                       <div class="flex items-center gap-2 shrink-0">
                         <button type="button" class="text-xs px-2 py-1 rounded border border-gray-300 whitespace-nowrap" @click="commitEdit(idx)">save</button>
                         <button type="button" class="text-xs px-2 py-1 rounded border border-gray-300 whitespace-nowrap" @click="cancelEdit(idx)">cancel</button>

@@ -637,7 +637,11 @@ app.post('/api/check/background', async (c) => {
     const systemPrompt = typeof body?.systemPrompt === 'string' ? body.systemPrompt : '';
     const whitelist = Array.isArray(body?.whitelist) ? body.whitelist : [];
     const blacklist = Array.isArray(body?.blacklist) ? body.blacklist : [];
-    const apiKey = serverApiKey || body?.userApiKey || Deno.env.get("GROQ_API_KEY");
+    // Prefer Authorization: Bearer <key> header, then body.userApiKey, then env
+    const authHeader = c.req.header('Authorization') || c.req.header('authorization') || '';
+    const m = authHeader.match(/^Bearer\s+(.+)$/i);
+    const headerKey = m ? m[1].trim() : '';
+    const apiKey = serverApiKey || headerKey || body?.userApiKey || Deno.env.get("GROQ_API_KEY");
     if (!apiKey) return c.json({ error: 'No Groq API key available.' }, 400);
     if (!email) return c.json({ error: 'email required' }, 400);
     const out = await backgroundAssessEmail(apiKey, email, systemPrompt, whitelist, blacklist);
@@ -657,7 +661,10 @@ app.post('/api/jobs', async (c) => {
     let items = Array.isArray(body?.items) ? body.items : [];
     const systemPrompt = typeof body?.systemPrompt === 'string' ? body.systemPrompt : '';
     const concurrency = Math.max(1, Number(body?.concurrency || 8) || 8);
-    const apiKey = serverApiKey || body?.userApiKey || Deno.env.get("GROQ_API_KEY");
+    const authHeader = c.req.header('Authorization') || c.req.header('authorization') || '';
+    const m = authHeader.match(/^Bearer\s+(.+)$/i);
+    const headerKey = m ? m[1].trim() : '';
+    const apiKey = serverApiKey || headerKey || body?.userApiKey || Deno.env.get("GROQ_API_KEY");
     if (!apiKey) return c.json({ error: 'No Groq API key available.' }, 400);
     // Normalize items to { id, email, status }
     items = items.map((v) => {
