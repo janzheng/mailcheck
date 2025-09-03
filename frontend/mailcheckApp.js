@@ -21,9 +21,9 @@ export default function mailcheckApp() {
     emailFieldName: '',
     detectedEmailCount: 0,
 
-    // Whitelist/Blacklist rules UI (emails or domains or regex), persisted in localStorage
-    whitelistText: '',
-    blacklistText: '',
+    // Allowlist/Blocklist rules UI (emails or domains or regex), persisted in localStorage
+    allowlistText: '',
+    blocklistText: '',
 
     // Single email spot-check
     singleEmailInput: '',
@@ -70,15 +70,15 @@ export default function mailcheckApp() {
       if (this.jobName && this.jobStore[this.jobName]) {
         this.hydrateFromJob(this.jobStore[this.jobName]);
       }
-      // Load whitelist/blacklist from storage with UI-provided examples
+      // Load allowlist/blocklist from storage with UI-provided examples
       try {
-        const wl = localStorage.getItem('mailcheck_whitelist_v1');
-        this.whitelistText = (wl && wl.trim()) ? wl : '@groq.com';
-      } catch (_) { this.whitelistText = '@groq.com'; }
+        const wl = localStorage.getItem('mailcheck_allowlist_v1');
+        this.allowlistText = (wl && wl.trim()) ? wl : '@groq.com';
+      } catch (_) { this.allowlistText = '@groq.com'; }
       try {
-        const bl = localStorage.getItem('mailcheck_blacklist_v1');
-        this.blacklistText = (bl && bl.trim()) ? bl : '/^[a-z]{2,}[0-9]{1,4}@/i\n@temp-mail.com\n*@noidem';
-      } catch (_) { this.blacklistText = '/^[a-z]{2,}[0-9]{1,4}@/i\n@temp-mail.com\n*@noidem'; }
+        const bl = localStorage.getItem('mailcheck_blocklist_v1');
+        this.blocklistText = (bl && bl.trim()) ? bl : '/^[a-z]{2,}[0-9]{1,4}@/i\n@temp-mail.com\n*@noidem';
+      } catch (_) { this.blocklistText = '/^[a-z]{2,}[0-9]{1,4}@/i\n@temp-mail.com\n*@noidem'; }
       try { this._refreshJobRunningMap(); } catch (_) {}
       try { this._watchActiveRunner(); } catch (_) {}
     },
@@ -138,8 +138,8 @@ export default function mailcheckApp() {
         this.jobStore[name] = payload;
         this.saveJobsToStorage();
         // Persist lists for the app
-        try { localStorage.setItem('mailcheck_whitelist_v1', this.whitelistText || ''); } catch (_) {}
-        try { localStorage.setItem('mailcheck_blacklist_v1', this.blacklistText || ''); } catch (_) {}
+        try { localStorage.setItem('mailcheck_allowlist_v1', this.allowlistText || ''); } catch (_) {}
+        try { localStorage.setItem('mailcheck_blocklist_v1', this.blocklistText || ''); } catch (_) {}
       } catch (_) {}
     },
     hydrateFromJob(jobPayload) {
@@ -654,7 +654,7 @@ export default function mailcheckApp() {
         }
           if (!this.hasServerKey && !this.userApiKey) throw new Error('No Groq API key set. Add a key to run checks.');
         // Mark as checking and persist before network call to avoid duplicate work by runners
-        rec.bg_status = 'checking'; rec.bg_message = ''; rec.bg_checked_at = null;
+        delete rec.bg_assessments; rec.bg_status = 'checking'; rec.bg_message = ''; rec.bg_checked_at = null;
         payload.items[idx] = rec; payload.updated_at = new Date().toISOString();
         this.jobStore[jobName] = payload; this.saveJobsToStorage(); this.refreshJobsArray();
         if (this.jobName === jobName) { this.items[idx] = { ...this.items[idx], ...rec }; this.recomputeDetectedEmails(); }
@@ -717,7 +717,7 @@ export default function mailcheckApp() {
         delete rec.bg_compound_evidence;
         delete rec.bg_browser_evidence;
         delete rec.bg_final_evidence;
-        rec.bg_status = 'checking';
+        delete rec.bg_assessments; rec.bg_status = 'checking';
         rec.bg_message = '';
         this.saveActiveJob();
         // Ensure sidebar reflects running state for per-row checks
@@ -792,7 +792,7 @@ export default function mailcheckApp() {
           delete rec.bg_compound_evidence;
           delete rec.bg_browser_evidence;
           delete rec.bg_final_evidence;
-          rec.bg_status = 'checking';
+          delete rec.bg_assessments; rec.bg_status = 'checking';
           rec.bg_message = '';
           rec.bg_checked_at = null;
           this.items[idx] = rec;
@@ -865,7 +865,7 @@ export default function mailcheckApp() {
       const resp = await fetch('/api/check/background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, systemPrompt: systemPrompt || '', userApiKey: this.userApiKey || undefined, whitelist: this.parseListText(this.whitelistText), blacklist: this.parseListText(this.blacklistText) })
+        body: JSON.stringify({ email, systemPrompt: systemPrompt || '', userApiKey: this.userApiKey || undefined, allowlist: this.parseListText(this.allowlistText), blocklist: this.parseListText(this.blocklistText) })
       });
       if (!resp.ok) throw new Error(await resp.text().catch(() => resp.statusText));
       return await resp.json();
@@ -976,7 +976,7 @@ export default function mailcheckApp() {
     // Display label for statuses (new person confidence scale + legacy)
     statusLabel(status) {
       if (status === 'academic') return 'academic';
-      if (status === 'whitelist') return 'whitelist';
+      if (status === 'whitelist') return 'allowlist';
       if (status === 'person_high') return 'likely real person';
       if (status === 'person_low') return 'possible person';
       if (status === 'person_none') return 'no evidence';
@@ -1098,6 +1098,147 @@ export default function mailcheckApp() {
       if (status === 'spam' || status === 'likely_spam' || status === 'error') return 'bg-red-100 text-red-800 border-red-200';
       if (status === 'checking') return 'bg-blue-100 text-blue-800 border-blue-200';
       return 'bg-gray-100 text-gray-800 border-gray-200';
+    },
+
+    // Generalized assessment text formatting
+    formatAssessmentsText(record) {
+      try {
+        const fields = record || {};
+        const assessments = Array.isArray(fields.bg_assessments) ? fields.bg_assessments : [];
+        return this._formatAssessmentsTextCore(fields, assessments);
+      } catch (_) { return ''; }
+    },
+    formatAssessmentsTextFromResult(result) {
+      try {
+        if (!result) return '';
+        const fields = { ...(result.fields || {}) };
+        if (result.status && !fields.bg_status) fields.bg_status = result.status;
+        if (result.message && !fields.bg_message) fields.bg_message = result.message;
+        const assessments = Array.isArray(result.assessments) ? result.assessments : (Array.isArray(fields.bg_assessments) ? fields.bg_assessments : []);
+        return this._formatAssessmentsTextCore(fields, assessments);
+      } catch (_) { return ''; }
+    },
+    _formatAssessmentsTextCore(fields, assessments) {
+      try {
+        const lines = [];
+        const prettyName = (n) => ({ final_judge: 'final', compound: 'llm', browser: 'browser', academic: 'academic', allowlist: 'allowlist', blocklist: 'blocklist' }[String(n || '')] || String(n || ''));
+        const byName = {};
+        for (const a of (assessments || [])) { if (a && a.name && !byName[a.name]) byName[a.name] = a; }
+        // If some assessors ran but didn't add to bg_assessments, infer lightweight entries from fields/messages
+        // final
+        if (!byName.final_judge && (fields.bg_final_short || fields.bg_final_label || fields.bg_final_detail)) {
+          byName.final_judge = { name: 'final_judge', status: fields.bg_status || null, message: fields.bg_final_short || fields.bg_final_label || null };
+        }
+        // browser
+        if (!byName.browser && (fields.bg_browser_short || fields.bg_browser_label || fields.bg_browser_detail)) {
+          byName.browser = { name: 'browser', status: null, message: fields.bg_browser_short || fields.bg_browser_label || null };
+        }
+        // compound
+        if (!byName.compound && (fields.bg_compound_short || fields.bg_compound_label || fields.bg_compound_detail)) {
+          byName.compound = { name: 'compound', status: null, message: fields.bg_compound_short || fields.bg_compound_label || null };
+        }
+        // academic
+        if (!byName.academic && (fields.bg_academic || fields.bg_institution || fields.bg_academic_msg)) {
+          byName.academic = { name: 'academic', status: fields.bg_academic ? 'academic' : null, message: fields.bg_academic_msg || (fields.bg_institution ? ('Academic institution: ' + fields.bg_institution) : null) };
+        }
+        // allowlist/blocklist
+        if (!byName.allowlist && (fields.bg_allowlist_rule || fields.bg_allowlist_msg)) {
+          byName.allowlist = { name: 'allowlist', status: 'whitelist', message: fields.bg_allowlist_msg || (fields.bg_allowlist_rule ? ('matched ' + fields.bg_allowlist_rule) : null) };
+        }
+        if (!byName.blocklist && (fields.bg_blocklist_rule || fields.bg_blocklist_msg)) {
+          byName.blocklist = { name: 'blocklist', status: 'spam', message: fields.bg_blocklist_msg || (fields.bg_blocklist_rule ? ('matched ' + fields.bg_blocklist_rule) : null) };
+        }
+        const pushBlock = (name, header, detail, evidence) => {
+          const title = prettyName(name);
+          const headerLine = (title + ': ' + String(header || '').trim()).trim();
+          lines.push(headerLine);
+          if (detail && String(detail).trim()) lines.push(String(detail).trim());
+          if (Array.isArray(evidence) && evidence.length > 0) {
+            for (const e of evidence.slice(0, 5)) { const s = String(e || '').trim(); if (s) lines.push('- ' + s); }
+          }
+          lines.push('');
+        };
+        // Quick scan one-liners from API (if provided)
+        const scanLines = Array.isArray(fields.bg_assessor_lines) ? fields.bg_assessor_lines : [];
+        if (scanLines.length > 0) {
+          for (const s of scanLines) { const t = String(s || '').trim(); if (t) lines.push(t); }
+          lines.push('');
+        }
+        // Ordered known assessments first
+        const order = ['final_judge', 'browser', 'compound', 'academic', 'allowlist', 'blocklist'];
+        const seen = new Set();
+        const getLabel = (s) => this.statusLabel ? this.statusLabel(s) : String(s || '');
+        for (const key of order) {
+          if (byName[key]) {
+            const a = byName[key]; seen.add(key);
+            if (key === 'final_judge') {
+              const header = fields.bg_final_short || a.message || fields.bg_final_label || getLabel(a.status);
+              pushBlock(key, header, fields.bg_final_detail, Array.isArray(fields.bg_final_evidence) ? fields.bg_final_evidence : []);
+              continue;
+            }
+            if (key === 'browser') {
+              const header = fields.bg_browser_short || a.message || fields.bg_browser_label || getLabel(a.status);
+              pushBlock(key, header, fields.bg_browser_detail, Array.isArray(fields.bg_browser_evidence) ? fields.bg_browser_evidence : []);
+              continue;
+            }
+            if (key === 'compound') {
+              const header = fields.bg_compound_short || a.message || fields.bg_compound_label || getLabel(a.status);
+              pushBlock(key, header, fields.bg_compound_detail, Array.isArray(fields.bg_compound_evidence) ? fields.bg_compound_evidence : []);
+              continue;
+            }
+            if (key === 'academic') {
+              const header = fields.bg_academic_msg || a.message || getLabel(a.status);
+              const extra = fields.bg_institution ? ('Institution: ' + fields.bg_institution) : '';
+              pushBlock(key, header, extra, []);
+              continue;
+            }
+            if (key === 'allowlist') {
+              const header = fields.bg_allowlist_msg || a.message || getLabel(a.status);
+              const extra = fields.bg_allowlist_rule ? ('Rule: ' + fields.bg_allowlist_rule) : '';
+              pushBlock(key, header, extra, []);
+              continue;
+            }
+            if (key === 'blocklist') {
+              const header = fields.bg_blocklist_msg || a.message || getLabel(a.status);
+              const extra = fields.bg_blocklist_rule ? ('Rule: ' + fields.bg_blocklist_rule) : '';
+              pushBlock(key, header, extra, []);
+              continue;
+            }
+          }
+        }
+        // Any remaining assessments not in known order
+        for (const a of (assessments || [])) {
+          if (!a || !a.name || seen.has(a.name)) continue;
+          const header = a.message || getLabel(a.status);
+          pushBlock(a.name, header, '', []);
+        }
+        // Also include any inferred entries not present in original list
+        for (const [name, a] of Object.entries(byName)) {
+          if (seen.has(name)) continue;
+          const header = a.message || getLabel(a.status);
+          // Attach evidence/detail when available by name
+          let detail = '';
+          let ev = [];
+          if (name === 'final_judge') { detail = fields.bg_final_detail; ev = Array.isArray(fields.bg_final_evidence) ? fields.bg_final_evidence : []; }
+          else if (name === 'browser') { detail = fields.bg_browser_detail; ev = Array.isArray(fields.bg_browser_evidence) ? fields.bg_browser_evidence : []; }
+          else if (name === 'compound') { detail = fields.bg_compound_detail; ev = Array.isArray(fields.bg_compound_evidence) ? fields.bg_compound_evidence : []; }
+          else if (name === 'academic') { detail = fields.bg_institution ? ('Institution: ' + fields.bg_institution) : ''; ev = []; }
+          else if (name === 'allowlist') { detail = fields.bg_allowlist_rule ? ('Rule: ' + fields.bg_allowlist_rule) : ''; ev = []; }
+          else if (name === 'blocklist') { detail = fields.bg_blocklist_rule ? ('Rule: ' + fields.bg_blocklist_rule) : ''; ev = []; }
+          pushBlock(name, header, detail, ev);
+          seen.add(name);
+        }
+        // Fallback when no assessments: show overall status/message if present
+        if (lines.filter(s => s && s.trim()).length === 0) {
+          const status = fields.bg_status || '';
+          if (String(status).toLowerCase() !== 'checking') {
+            const header = fields.bg_message || getLabel(status) || '';
+            if (header) lines.push(String(header));
+          }
+        }
+        while (lines.length > 0 && !String(lines[lines.length - 1]).trim()) lines.pop();
+        return lines.join('\n');
+      } catch (_) { return ''; }
     },
 
     // i18n

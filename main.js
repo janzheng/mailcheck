@@ -635,8 +635,11 @@ app.post('/api/check/background', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const email = String(body?.email || '').trim();
     const systemPrompt = typeof body?.systemPrompt === 'string' ? body.systemPrompt : '';
-    const whitelist = Array.isArray(body?.whitelist) ? body.whitelist : [];
-    const blacklist = Array.isArray(body?.blacklist) ? body.blacklist : [];
+    const allowlist = Array.isArray(body?.allowlist) ? body.allowlist : [];
+    const blocklist = Array.isArray(body?.blocklist) ? body.blocklist : [];
+    // Legacy support for old parameter names
+    if (!allowlist.length && Array.isArray(body?.whitelist)) allowlist.push(...body.whitelist);
+    if (!blocklist.length && Array.isArray(body?.blacklist)) blocklist.push(...body.blacklist);
     // Prefer Authorization: Bearer <key> header, then body.userApiKey, then env
     const authHeader = c.req.header('Authorization') || c.req.header('authorization') || '';
     const m = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -644,7 +647,7 @@ app.post('/api/check/background', async (c) => {
     const apiKey = serverApiKey || headerKey || body?.userApiKey || Deno.env.get("GROQ_API_KEY");
     if (!apiKey) return c.json({ error: 'No Groq API key available.' }, 400);
     if (!email) return c.json({ error: 'email required' }, 400);
-    const out = await backgroundAssessEmail(apiKey, email, systemPrompt, whitelist, blacklist);
+    const out = await backgroundAssessEmail(apiKey, email, systemPrompt, allowlist, blocklist);
     // try { console.log('>> [/api/check/background] result:', JSON.stringify(out)); } catch (_) {}
     return c.json(out);
   } catch (error) {

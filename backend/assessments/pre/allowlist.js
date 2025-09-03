@@ -20,7 +20,7 @@ function compileRegex(token) {
   } catch (_) { return null; }
 }
 
-function normalizeWhitelistTokens(list) {
+function normalizeAllowlistTokens(list) {
   try {
     if (!Array.isArray(list)) return [];
     const out = [];
@@ -50,12 +50,12 @@ function domainMatches(supplied, actualDomain) {
   } catch (_) { return false; }
 }
 
-function matchWhitelist(email, tokens) {
+function matchAllowlist(email, tokens) {
   try {
     const eRaw = String(email || '');
     const e = eRaw.toLowerCase();
     const domain = getEmailDomain(e);
-    const list = normalizeWhitelistTokens(tokens);
+    const list = normalizeAllowlistTokens(tokens);
     for (const t of list) {
       if (!t) continue;
       if (isRegexToken(t)) {
@@ -84,17 +84,17 @@ function matchWhitelist(email, tokens) {
   } catch (_) { return null; }
 }
 
-export function preWhitelistAssess(email, whitelistRules) {
+export function preAllowlistAssess(email, allowlistRules) {
   try {
-    const matched = matchWhitelist(email, whitelistRules);
-    if (!matched) return null;
-    const fields = { bg_whitelist_rule: matched, bg_whitelist_msg: 'Whitelisted' };
+    const matched = matchAllowlist(email, allowlistRules);
+    if (!matched) return { message: 'no match' };
+    const fields = { bg_allowlist_rule: matched, bg_allowlist_msg: 'Allowlisted' };
     return {
       decided: true,
       status: 'whitelist',
-      message: 'Whitelisted via ' + matched,
+      message: 'Allowlisted via ' + matched,
       fields,
-      assessment: { name: 'whitelist', status: 'pass', message: 'matched ' + matched }
+      assessment: { name: 'allowlist', status: 'pass', message: 'matched ' + matched }
     };
   } catch (_) { return null; }
 }

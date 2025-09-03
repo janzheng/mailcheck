@@ -2,25 +2,25 @@
 // Exposes a single backgroundAssessEmail() used by API routes
 
 import { isEmailAddress as uIsEmailAddress, mergeSpamStatus as uMergeSpamStatus, getEmailDomain as uGetEmailDomain, isGenericEmailDomain as uIsGenericEmailDomain, dedupeStrings as uDedupeStrings, statusToLabel as uStatusToLabel } from './utils.js';
-import { preWhitelistAssess as modPreWhitelistAssess } from './pre/whitelist.js';
+import { preAllowlistAssess as modPreAllowlistAssess } from './pre/allowlist.js';
 import { preAcademicAssess as modPreAcademicAssess } from './pre/academic.js';
-import { preBlacklistAssess as modPreBlacklistAssess } from './pre/blacklist.js';
+import { preBlocklistAssess as modPreBlocklistAssess } from './pre/blocklist.js';
 import { roleHeuristicAssess as modRoleHeuristicAssess } from './full/roleHeuristic.js';
 import { llmCompoundAssess as modLlmCompoundAssess } from './full/llmCompound.js';
 import { browserSearchAssess as modBrowserSearchAssess } from './full/browserSearch.js';
 import { finalJudgeAssess as modFinalJudgeAssess } from './full/finalJudge.js';
 
-export async function backgroundAssessEmail(apiKey, email, systemPrompt, whitelistRules, blacklistRules) {
+export async function backgroundAssessEmail(apiKey, email, systemPrompt, allowlistRules, blocklistRules) {
   let status = undefined; const messages = []; const fields = {};
   const assessments = [];
   if (!uIsEmailAddress(email)) { status = 'spam'; messages.push('Invalid email format'); }
 
   // Pre-assessments (early exits)
-  try { console.log('>> [pre] starting', { email, whitelistCount: Array.isArray(whitelistRules) ? whitelistRules.length : 0, blacklistCount: Array.isArray(blacklistRules) ? blacklistRules.length : 0 }); } catch (_) {}
+  try { console.log('>> [pre] starting', { email, allowlistCount: Array.isArray(allowlistRules) ? allowlistRules.length : 0, blocklistCount: Array.isArray(blocklistRules) ? blocklistRules.length : 0 }); } catch (_) {}
   const preAssessors = [
-    { name: 'whitelist', run: () => modPreWhitelistAssess(email, whitelistRules) },
+    { name: 'allowlist', run: () => modPreAllowlistAssess(email, allowlistRules) },
     { name: 'academic', run: () => modPreAcademicAssess(email) },
-    { name: 'blacklist', run: () => modPreBlacklistAssess(email, blacklistRules) },
+    { name: 'blocklist', run: () => modPreBlocklistAssess(email, blocklistRules) },
   ];
   for (const pre of preAssessors) {
     try {
@@ -29,15 +29,42 @@ export async function backgroundAssessEmail(apiKey, email, systemPrompt, whiteli
       if (r && r.decided) {
         if (r.fields) Object.assign(fields, r.fields);
         if (r.assessment) assessments.push(r.assessment);
+        // Include role heuristic quick flag for scanning
+        const roleQuick = modRoleHeuristicAssess(email);
+        if (roleQuick && roleQuick.message) { fields.bg_role = true; fields.bg_role_msg = roleQuick.message; }
+        else { fields.bg_role = false; }
+        // Build standardized one-liner outputs for all assessors (marking not-run assessors explicitly)
+        const toHuman = (s) => (s === 'person_high' ? 'likely human' : s === 'person_low' ? 'possible human' : s === 'person_none' ? 'no evidence' : s === 'spam' ? 'spam' : String(s || ''));
+        const lines = [];
+        // allowlist / blocklist
+        lines.push('allowlist: ' + (fields.bg_allowlist_rule ? 'allowed' : 'not listed'));
+        lines.push('blocklist: ' + (fields.bg_blocklist_rule ? 'blocked' : 'not blocked'));
+        // academic
+        lines.push('academic: ' + (fields.bg_academic ? (fields.bg_institution ? fields.bg_institution : 'academic') : 'not academic'));
+        // role
+        lines.push('role: ' + (fields.bg_role ? (fields.bg_role_msg || 'role-based') : 'clean'));
+        // browser / llm not run due to early exit
+        lines.push('browser: not run');
+        lines.push('llm: not run');
+        // final maps to decided status
+        lines.push('final: ' + toHuman(r.status));
+        fields.bg_assessor_lines = lines;
         fields.bg_assessments = assessments;
         return { email, status: r.status, message: r.message || '', fields, assessments };
+      } else {
+        // Even if not decided, add assessment for tracking
+        assessments.push({ name: pre.name, status: null, message: r?.message || 'no match' });
       }
-    } catch (_) {}
+    } catch (_) {
+      assessments.push({ name: pre.name, status: null, message: 'error' });
+    }
   }
 
   const role = modRoleHeuristicAssess(email);
   if (role.status) status = uMergeSpamStatus(status, role.status);
   if (role.message) messages.push(role.message);
+  if (role && role.message) { fields.bg_role = true; fields.bg_role_msg = role.message; }
+  else { fields.bg_role = false; }
 
   try {
     let llm = null; let browse = null;
@@ -112,6 +139,31 @@ export async function backgroundAssessEmail(apiKey, email, systemPrompt, whiteli
       if (judge && judge.message) parts.push(judge.message);
       const fallback = parts.join(' ').trim();
       fields.bg_final_detail = fallback || 'No public evidence found.';
+    }
+    // Build standardized one-liner outputs for scanning
+    const toHuman = (s) => (s === 'person_high' ? 'likely human' : s === 'person_low' ? 'possible human' : s === 'person_none' ? 'no evidence' : s === 'spam' ? 'spam' : String(s || ''));
+    const lines = [];
+    lines.push('allowlist: ' + (fields.bg_allowlist_rule ? 'allowed' : 'not listed'));
+    lines.push('blocklist: ' + (fields.bg_blocklist_rule ? 'blocked' : 'not blocked'));
+    lines.push('academic: ' + (fields.bg_academic ? (fields.bg_institution ? fields.bg_institution : 'academic') : 'not academic'));
+    lines.push('role: ' + (fields.bg_role ? (fields.bg_role_msg || 'role-based') : 'clean'));
+    lines.push('browser: ' + (browse && browse.status ? toHuman(browse.status) : (fields.bg_browser_label ? String(fields.bg_browser_label) : 'not run')));
+    lines.push('llm: ' + (llm && llm.status ? toHuman(llm.status) : (fields.bg_compound_label ? String(fields.bg_compound_label) : 'not run')));
+    lines.push('final: ' + toHuman(status));
+    fields.bg_assessor_lines = lines;
+    // Ensure all assessors have entries in the assessments array
+    const assessorNames = ['allowlist', 'academic', 'blocklist', 'role_heuristic', 'compound', 'browser', 'final_judge'];
+    for (const name of assessorNames) {
+      const existing = assessments.find(a => a.name === name);
+      if (!existing) {
+        let message = 'not run';
+        let status = null;
+        if (name === 'allowlist') message = fields.bg_allowlist_rule ? 'allowed' : 'no match';
+        else if (name === 'blocklist') message = fields.bg_blocklist_rule ? 'blocked' : 'no match';
+        else if (name === 'academic') message = fields.bg_academic ? 'academic' : 'no match';
+        else if (name === 'role_heuristic') message = fields.bg_role ? (fields.bg_role_msg || 'role-based') : 'clean';
+        assessments.push({ name, status, message });
+      }
     }
   } catch (err) {
     try { console.error('>> [compound] error:', err && err.message ? err.message : String(err)); } catch (_) {}

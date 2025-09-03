@@ -20,7 +20,7 @@ function compileRegex(token) {
   } catch (_) { return null; }
 }
 
-function normalizeBlacklistTokens(list) {
+function normalizeBlocklistTokens(list) {
   try {
     const input = Array.isArray(list) ? list : [];
     const out = [];
@@ -53,17 +53,17 @@ function domainMatches(supplied, actualDomain) {
   } catch (_) { return false; }
 }
 
-function matchBlacklist(email, tokens) {
+function matchBlocklist(email, tokens) {
   try {
     const eRaw = String(email || '');
     const e = eRaw.toLowerCase();
     const local = eRaw.split('@')[0] || '';
     const domain = getEmailDomain(e);
-    const list = normalizeBlacklistTokens(tokens);
-    try { console.log('>> [blacklist] normalized list', list); } catch (_) {}
+    const list = normalizeBlocklistTokens(tokens);
+    try { console.log('>> [blocklist] normalized list', list); } catch (_) {}
     for (const t of list) {
       if (!t) continue;
-      try { console.log('>> [blacklist] processing token', t, 'isRegex:', isRegexToken(t)); } catch (_) {}
+      try { console.log('>> [blocklist] processing token', t, 'isRegex:', isRegexToken(t)); } catch (_) {}
       // Regex rule
       if (isRegexToken(t)) {
         const re = compileRegex(t);
@@ -77,7 +77,7 @@ function matchBlacklist(email, tokens) {
               re.lastIndex = 0; if (re.test(local + '@')) { matched = true; target = 'local@'; }
               if (!matched) { re.lastIndex = 0; if (re.test((local.toLowerCase()) + '@')) { matched = true; target = 'local@-lower'; } }
             }
-            try { console.log('>> [blacklist regex]', { rule: t, email: eRaw, matched, target }); } catch (_) {}
+            try { console.log('>> [blocklist regex]', { rule: t, email: eRaw, matched, target }); } catch (_) {}
             if (matched) return t;
           } catch (_) {}
         }
@@ -98,19 +98,19 @@ function matchBlacklist(email, tokens) {
   } catch (_) { return null; }
 }
 
-export function preBlacklistAssess(email, blacklistRules) {
+export function preBlocklistAssess(email, blocklistRules) {
   try {
-    try { console.log('>> [blacklist] called with', { email, rules: blacklistRules }); } catch (_) {}
-    const matched = matchBlacklist(email, blacklistRules);
-    try { console.log('>> [blacklist] match result', matched); } catch (_) {}
-    if (!matched) return null;
-    const fields = { bg_blacklist_rule: matched, bg_blacklist_msg: 'Blacklisted', bg_blacklist: true };
+    try { console.log('>> [blocklist] called with', { email, rules: blocklistRules }); } catch (_) {}
+    const matched = matchBlocklist(email, blocklistRules);
+    try { console.log('>> [blocklist] match result', matched); } catch (_) {}
+    if (!matched) return { message: 'no match' };
+    const fields = { bg_blocklist_rule: matched, bg_blocklist_msg: 'Blocklisted', bg_blocklist: true };
     return {
       decided: true,
       status: 'spam',
-      message: 'Blacklisted via ' + matched,
+      message: 'Blocklisted via ' + matched,
       fields,
-      assessment: { name: 'blacklist', status: 'fail', message: 'matched ' + matched }
+      assessment: { name: 'blocklist', status: 'fail', message: 'matched ' + matched }
     };
   } catch (_) { return null; }
 }

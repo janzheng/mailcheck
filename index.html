@@ -332,11 +332,11 @@
         <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Allowlist (emails/domains or regex)</label>
-            <textarea x-model="whitelistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="@groq.com\nuser@example.com\n*@example.org\n/^first\.last@company\.com$/i"></textarea>
+            <textarea x-model="allowlistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="@groq.com\nuser@example.com\n*@example.org\n/^first\.last@company\.com$/i"></textarea>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Blocklist (emails/domains or regex)</label>
-            <textarea x-model="blacklistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="/^[a-z]{2,}[0-9]{2,4}@/i\n@temp-mail.com\n*@noidem"></textarea>
+            <textarea x-model="blocklistText" rows="3" class="w-full px-3 py-2 border-0 bg-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" placeholder="/^[a-z]{2,}[0-9]{2,4}@/i\n@temp-mail.com\n*@noidem"></textarea>
           </div>
         </div>
         <div class="mt-2 text-xs text-gray-500">
@@ -370,13 +370,12 @@
             <span class="px-2 py-0.5 text-xs border rounded" :class="badgeClass(singleResult?.status)" x-text="statusLabel(singleResult?.status)"></span>
             <span class="text-xs text-gray-600" x-text="singleResult?.email"></span>
           </div>
-          <div class="text-xs text-gray-700" x-text="singleResult?.fields?.bg_academic_msg || ''"></div>
-          <div class="text-xs" x-text="singleResult?.fields?.bg_compound_short || singleResult?.fields?.bg_compound_msg || singleResult?.message || ''"></div>
-          <details class="mt-1" x-show="singleResult?.fields?.bg_compound_detail || singleResult?.fields?.bg_compound_debug">
-            <summary class="text-xs text-gray-600 cursor-pointer">detail</summary>
-            <div class="text-xs text-gray-700 whitespace-pre-wrap" x-text="singleResult?.fields?.bg_compound_detail || ''"></div>
-            <div class="text-[10px] text-gray-400 mt-1" x-show="singleResult?.fields?.bg_compound_debug" x-text="singleResult?.fields?.bg_compound_debug"></div>
+          <details x-show="singleResult?.status !== 'checking'">
+            <summary class="text-xs text-gray-700 cursor-pointer">details</summary>
+            <div class="mt-1 text-xs font-mono whitespace-pre-wrap bg-gray-50 border rounded p-2" x-text="formatAssessmentsTextFromResult(singleResult)"></div>
           </details>
+          <div class="text-xs text-gray-700" x-show="singleResult?.status === 'checking'" x-text="singleResult?.fields?.bg_academic_msg || ''"></div>
+          <div class="text-xs" x-show="singleResult?.status === 'checking'" x-text="singleResult?.fields?.bg_compound_short || singleResult?.fields?.bg_compound_msg || singleResult?.message || ''"></div>
         </div>
       </div>
     </div>
@@ -434,39 +433,11 @@
                   </td>
                   <td class="px-2 py-1">
                     <div class="flex flex-col gap-1">
-                      <div>
-                        <span class="badge text-xs px-2 py-0.5 border rounded bg-gray-50"
-                          x-text="
-                            it.bg_final_label ? ('[' + it.bg_final_label + ']') :
-                            it.bg_browser_label ? ('[' + it.bg_browser_label + ']') :
-                            it.bg_compound_label ? ('[' + it.bg_compound_label + ']') :
-                            (it.bg_status === 'checking' ? '[checking]' : '[' + statusLabel(it.bg_status) + ']')
-                          "></span>
-                      </div>
-                      <div class="text-xs text-gray-700" x-show="it.bg_academic_msg" x-text="it.bg_academic_msg"></div>
-                      <div class="text-xs" x-text="it.bg_final_short || it.bg_browser_short || it.bg_compound_short || it.bg_compound_msg || ''"></div>
-                      <div class="text-xs text-gray-700" x-show="it.bg_message" x-text="it.bg_message"></div>
+                      <details x-show="it.bg_status !== 'checking'">
+                        <summary class="text-xs text-gray-700 cursor-pointer">details</summary>
+                        <div class="mt-1 text-xs font-mono whitespace-pre-wrap bg-gray-50 border rounded p-2" x-text="formatAssessmentsText(it)"></div>
+                      </details>
                     </div>
-                    <details class="mt-1" x-show="it.bg_final_detail || it.bg_browser_detail || it.bg_compound_detail || it.bg_compound_debug || it.bg_browser_debug || (it.bg_final_evidence && it.bg_final_evidence.length) || (it.bg_browser_evidence && it.bg_browser_evidence.length) || (it.bg_compound_evidence && it.bg_compound_evidence.length)">
-                      <summary class="text-xs text-gray-600 cursor-pointer">detail</summary>
-                      <div class="text-xs text-gray-700 whitespace-pre-wrap" x-text="it.bg_final_detail || it.bg_browser_detail || it.bg_compound_detail || ''"></div>
-                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="it.bg_final_evidence && it.bg_final_evidence.length">
-                        <template x-for="(e,i) in it.bg_final_evidence" :key="i">
-                          <li x-text="e"></li>
-                        </template>
-                      </ul>
-                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="(!it.bg_final_evidence || !it.bg_final_evidence.length) && it.bg_browser_evidence && it.bg_browser_evidence.length">
-                        <template x-for="(e,i) in it.bg_browser_evidence" :key="i">
-                          <li x-text="e"></li>
-                        </template>
-                      </ul>
-                      <ul class="list-disc pl-5 text-xs text-gray-700 mt-1" x-show="(!it.bg_final_evidence || !it.bg_final_evidence.length) && (!it.bg_browser_evidence || !it.bg_browser_evidence.length) && it.bg_compound_evidence && it.bg_compound_evidence.length">
-                        <template x-for="(e,i) in it.bg_compound_evidence" :key="i">
-                          <li x-text="e"></li>
-                        </template>
-                      </ul>
-                      <div class="text-[10px] text-gray-400 mt-1" x-show="it.bg_compound_debug || it.bg_browser_debug" x-text="it.bg_compound_debug || it.bg_browser_debug"></div>
-                    </details>
                   </td>
                 </tr>
               </template>
